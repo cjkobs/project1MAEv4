@@ -56,8 +56,7 @@ class Dynamics(nn.Module):
 
         # Thrust
         # Note: Same reason as above. Need a 2-by-1 tensor.
-        N = len(state)
-        state_tensor = t.zeros((N, 5))
+        state_tensor = t.zeros((2, 5))
         state_tensor[:, 1] = -t.sin(state[:, 4])
         state_tensor[:, 3] = t.cos(state[:, 4])
         delta_state = BOOST_ACCEL * FRAME_TIME * t.mul(state_tensor, action[:, 0].reshape(-1, 1))
