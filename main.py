@@ -123,7 +123,7 @@ class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=1.)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.1)
     def step(self):
         def closure():
             loss = self.simulation(self.simulation.state)
@@ -160,7 +160,7 @@ class Optimize:
         plt.show()
 # Now it's time to run the code!
 
-T = 50  # number of time steps
+T = 80  # number of time steps
 dim_input = 5  # state space dimensions
 dim_hidden = 6  # latent dimensions
 dim_output = 2  # action space dimensions
@@ -168,4 +168,4 @@ d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
 o = Optimize(s)  # define optimizer
-o.train(40)  # solve the optimization problem, default: 40
+o.train(20)  # solve the optimization problem, default: 20
