@@ -45,7 +45,10 @@ class Dynamics(nn.Module):
         delta_state_gravity = t.tensor([0., -GRAVITY_ACCEL * FRAME_TIME, 0., 0., 0.])
 
         # Thrust with quadratic drag added on, should match up with the action vectors I think, this part
-        # wasn't entirely clear but I'm trying my damnedest
+        # wasn't entirely clear, but I'm trying my damnedest
+
+        # Also, I'm assuming that the state_tensor here is contains the action variables in the
+        # matrix that we went over in class in lecture 11 with the drag included
 
         state_tensor = t.zeros((5, 2))
         state_tensor[0, 0] = -1/2 * FRAME_TIME * t.sin(state[4])
@@ -57,7 +60,7 @@ class Dynamics(nn.Module):
 
         # Update velocity
         state = state + delta_state + delta_state_gravity
-        # Update state, make sure the step_mat aligns with how your states are
+        # Update state, matrix is slightly different from what was posted in Slack due to the problem set up differently
 
         step_mat = t.tensor([[1., 0., FRAME_TIME, 0., 0.],
                              [0., 1., 0., FRAME_TIME, 0.],
@@ -110,7 +113,7 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [0., 3/2., 1/4., 1., 1/7.]  # initial batch of state
+        state = [0., 1., 0., 1., 0.]  # distribution of initial states tracked in analysis supplementary file
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state):
@@ -169,3 +172,5 @@ c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
 o = Optimize(s)  # define optimizer
 o.train(20)  # solve the optimization problem, default: 20
+
+# see Analysis file in repo for results
