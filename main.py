@@ -47,7 +47,6 @@ class Dynamics(nn.Module):
         state[3] = y_dot
         state[4] = theta
         """
-
         # Apply gravity
         # Note: Here gravity is used to change velocity which is the second element of the state vector
         # Normally, we would do x[1] = x[1] + gravity * delta_time
@@ -58,32 +57,26 @@ class Dynamics(nn.Module):
         # Thrust
         # Note: Same reason as above. Need a 2-by-1 tensor.
 
-        state_tensor = t.zeros((1, 5))
-        state_tensor[0, 2] = -t.sin(state[4])
-        state_tensor[0, 3] = t.cos(state[4])
-        delta_state = BOOST_ACCEL * FRAME_TIME * t.matmul(state_tensor.t(), action)
+        state_tensor = t.zeros((5, 2))
+        state_tensor[2, 0] = -t.sin(state[4])
+        state_tensor[3, 0] = t.cos(state[4])
+        delta_state = BOOST_ACCEL * FRAME_TIME * t.matmul(action, t.t(state_tensor))
 
         # Theta
-        delta_state_theta = FRAME_TIME * t.matmul(t.tensor([[0.],
-                                                            [0.],
-                                                            [0.],
-                                                            [0.],
-                                                            [-1.]]), action)
+        delta_state_theta = FRAME_TIME * t.matmul(action, t.t(state_tensor))
 
         # Update velocity
         state = state + delta_state + delta_state_gravity + delta_state_theta
-
         # Update state
         # Note: Same as above. Use operators on matrices/tensors as much as possible. Do not use element-wise operators as they are considered inplace.
         step_mat = t.tensor([[1., FRAME_TIME, 0., 0., 0.],
-                                 [0., 1., 0., 0., 0.],
-                                 [0., 0., 1., FRAME_TIME, 0.],
-                                 [0., 0., 0., 1., 0.],
-                                 [0., 0., 0., 0., 1.]])
+                             [0., 1., 0., 0., 0.],
+                             [0., 0., 1., FRAME_TIME, 0.],
+                             [0., 0., 0., 1., 0.],
+                             [0., 0., 0., 0., 1.]])
         state = t.matmul(step_mat, state.t())
 
         return state
-
 
 # a deterministic controller
 # Note:
@@ -105,7 +98,8 @@ class Controller(nn.Module):
             nn.Linear(dim_input, dim_hidden),
             nn.Tanh(),
             nn.Linear(dim_hidden, dim_output),
-            # You can add more layers here
+            nn.Sigmoid(),
+            nn.Linear(dim_input, dim_output),
             nn.Sigmoid()
         )
 
@@ -206,7 +200,7 @@ class Optimize:
 T = 20  # number of time steps
 dim_input = 5  # state space dimensions
 dim_hidden = 20  # latent dimensions
-dim_output = 1  # action space dimensions
+dim_output = 2  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
