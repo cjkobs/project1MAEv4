@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 FRAME_TIME = 0.1  # time interval
 GRAVITY_ACCEL = 0.12  # gravity constant
 BOOST_ACCEL = 0.18  # thrust constant
+L_center_of_gravity = 5 / 1000 # center of gravity of rocket
 
 # # the following parameters are not being used in the sample code
 PLATFORM_WIDTH = 0.25  # landing platform width
@@ -41,8 +42,8 @@ class Dynamics(nn.Module):
         action[0] = thrust controller
         action[1] = omega controller
         state[0] = x
-        state[1] = x_dot
-        state[2] = y
+        state[1] = y
+        state[2] = x_dot
         state[3] = y_dot
         state[4] = theta
         """
@@ -52,17 +53,18 @@ class Dynamics(nn.Module):
         # Normally, we would do x[1] = x[1] + gravity * delta_time
         # but this is not allowed in PyTorch since it overwrites one variable (x[1]) that is part of the computational graph to be differentiated.
         # Therefore, I define a tensor dx = [0., gravity * delta_time], and do x = x + dx. This is allowed...
-        delta_state_gravity = t.tensor([0., 0., 0., -GRAVITY_ACCEL * FRAME_TIME, 0.])
+        delta_state_gravity = t.tensor([0., -GRAVITY_ACCEL * FRAME_TIME, 0., 0., 0.])
 
         # Thrust
         # Note: Same reason as above. Need a 2-by-1 tensor.
-        state_tensor = t.zeros((2, 5))
-        state_tensor[:, 1] = -t.sin(state[:, 4])
-        state_tensor[:, 3] = t.cos(state[:, 4])
-        delta_state = BOOST_ACCEL * FRAME_TIME * t.mul(state_tensor, action[:, 0].reshape(-1, 1))
+
+        state_tensor = t.zeros((5, 2))
+        state_tensor[2, 0] = -t.sin(state[4])
+        state_tensor[3, 0] = t.cos(state[4])
+        delta_state = BOOST_ACCEL * FRAME_TIME * t.matmul(action, t.t(state_tensor))
 
         # Theta
-        delta_state_theta = FRAME_TIME * t.mul(t.tensor([0., 0., 0., 0, -1.]), action[:, 0].reshape(-1, 1))
+        delta_state_theta = FRAME_TIME * t.matmul(action, t.t(state_tensor))
 
         # Update velocity
         state = state + delta_state + delta_state_gravity + delta_state_theta
@@ -74,7 +76,7 @@ class Dynamics(nn.Module):
                                  [0., 0., 1., FRAME_TIME, 0.],
                                  [0., 0., 0., 1., 0.],
                                  [0., 0., 0., 0., 1.]])
-        state = t.matmul(step_mat, state)
+        state = t.matmul(step_mat, state.t())
 
         return state
 
@@ -135,11 +137,12 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [1., 0., 0., 0., 0., 0]  # TODO: need batch of initial states
+        state = [1., 0., 0., 0., 0.]  # TODO: need batch of initial states
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state):
-        return state[0]**2 + state[1]**2
+        termination_error = (state[0] - L_center_of_gravity) ** 2 + state[1] ** 2 + state[3] ** 2 + state[4] ** 2
+        return termination_error
 
 
 # set up the optimizer
@@ -182,9 +185,9 @@ class Optimize:
 # Now it's time to run the code!
 
 T = 100  # number of time steps
-dim_input = 2  # state space dimensions
+dim_input = 5  # state space dimensions
 dim_hidden = 6  # latent dimensions
-dim_output = 1  # action space dimensions
+dim_output = 2  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
