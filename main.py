@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 # environment parameters
 
 FRAME_TIME = 0.1  # time interval
-GRAVITY_ACCEL = 0.12  # gravity constant
-BOOST_ACCEL = 0.18  # thrust constant
+GRAVITY_ACCEL = 9.81 / 1000  # gravity constant
+BOOST_ACCEL = 14.715 / 1000  # thrust constant
 L_center_of_gravity = 5 / 1000 # center of gravity of rocket
 
 # # the following parameters are not being used in the sample code
@@ -58,15 +58,17 @@ class Dynamics(nn.Module):
         # Thrust
         # Note: Same reason as above. Need a 2-by-1 tensor.
 
-        state_tensor = t.tensor([[-1/2 * FRAME_TIME ** 2 * -t.sin(state[4]), 0.],
-                                [1/2 * FRAME_TIME ** 2 * t.cos(state[4]), 0.],
-                                [-FRAME_TIME * t.sin(state[4]), 0.],
-                                [FRAME_TIME * t.cos(state[4]), 0.],
-                                [0., 1.]])
-        delta_state = t.matmul(action, t.t(state_tensor))
+        state_tensor = t.zeros((1, 5))
+        state_tensor[0, 2] = -t.sin(state[4])
+        state_tensor[0, 3] = t.cos(state[4])
+        delta_state = BOOST_ACCEL * FRAME_TIME * t.matmul(state_tensor.t(), action)
 
         # Theta
-        delta_state_theta = FRAME_TIME * t.matmul(action, t.t(state_tensor))
+        delta_state_theta = FRAME_TIME * t.matmul(t.tensor([[0.],
+                                                            [0.],
+                                                            [0.],
+                                                            [0.],
+                                                            [-1.]]), action)
 
         # Update velocity
         state = state + delta_state + delta_state_gravity + delta_state_theta
@@ -139,11 +141,11 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [3/2, 2., 4., 0., math.pi/4.]  # TODO: need batch of initial states
+        state = [3/2, 2., 4., 0., 0]  # TODO: need batch of initial states
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state):
-        termination_error = (state[0] - L_center_of_gravity) ** 2 + state[1] ** 2 + state[3] ** 2 + state[4] ** 2
+        termination_error = state[0] ** 2 + state[1] ** 2 + state[2] ** 2 + state[3] ** 2 + state[4] ** 2
         return termination_error
 
 
@@ -159,7 +161,7 @@ class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.2)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.5)
 
     def step(self):
         def closure():
@@ -201,13 +203,13 @@ class Optimize:
 
 # Now it's time to run the code!
 
-T = 100  # number of time steps
+T = 20  # number of time steps
 dim_input = 5  # state space dimensions
 dim_hidden = 20  # latent dimensions
-dim_output = 2  # action space dimensions
+dim_output = 1  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
 o = Optimize(s)  # define optimizer
-o.train(10)  # solve the optimization problem, default: 40
+o.train(40)  # solve the optimization problem, default: 40
 
