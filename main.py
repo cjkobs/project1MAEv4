@@ -58,10 +58,12 @@ class Dynamics(nn.Module):
         # Thrust
         # Note: Same reason as above. Need a 2-by-1 tensor.
 
-        state_tensor = t.zeros((5, 2))
-        state_tensor[2, 0] = -t.sin(state[4])
-        state_tensor[3, 0] = t.cos(state[4])
-        delta_state = BOOST_ACCEL * FRAME_TIME * t.matmul(action, t.t(state_tensor))
+        state_tensor = t.tensor([[-1/2 * FRAME_TIME ** 2 * -t.sin(state[4]), 0.],
+                                [1/2 * FRAME_TIME ** 2 * t.cos(state[4]), 0.],
+                                [-FRAME_TIME * t.sin(state[4]), 0.],
+                                [FRAME_TIME * t.cos(state[4]), 0.],
+                                [0., 1.]])
+        delta_state = t.matmul(action, t.t(state_tensor))
 
         # Theta
         delta_state_theta = FRAME_TIME * t.matmul(action, t.t(state_tensor))
@@ -137,7 +139,7 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [1., 0., 0., 0., 0.]  # TODO: need batch of initial states
+        state = [3/2, 2., 4., 0., math.pi/4.]  # TODO: need batch of initial states
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state):
@@ -157,7 +159,7 @@ class Optimize:
     def __init__(self, simulation):
         self.simulation = simulation
         self.parameters = simulation.controller.parameters()
-        self.optimizer = optim.LBFGS(self.parameters, lr=0.01)
+        self.optimizer = optim.LBFGS(self.parameters, lr=0.2)
 
     def step(self):
         def closure():
@@ -179,18 +181,33 @@ class Optimize:
         data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
         x = data[:, 0]
         y = data[:, 1]
-        plt.plot(x, y)
+        x_dot = data[:, 2]
+        y_dot = data[:, 3]
+        theta = data[:, 4]
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(x, y)
+        axs[0].set_xlabel('Horizontal Position')
+        axs[0].set_ylabel('Vertical Position')
+        axs[1].plot(y, x_dot, label="Horizontal Speed")
+        axs[1].plot(y, y_dot, label="Vertical Speed")
+        axs[1].legend(loc="best")
+        axs[1].set_xlabel("Vertical Position")
+        axs[1].set_ylabel("Velocity")
+        axs[2].plot(y, theta, label='Angle')
+        axs[2].legend(loc="best")
+        axs[2].set_xlabel("Vertical Position")
+        axs[2].set_ylabel("Angle")
         plt.show()
 
 # Now it's time to run the code!
 
 T = 100  # number of time steps
 dim_input = 5  # state space dimensions
-dim_hidden = 6  # latent dimensions
+dim_hidden = 20  # latent dimensions
 dim_output = 2  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
 o = Optimize(s)  # define optimizer
-o.train(4)  # solve the optimization problem, default: 40
+o.train(10)  # solve the optimization problem, default: 40
 
